@@ -97,12 +97,16 @@ async function ensureEngine() {
     const created = await createFaceSwap({
       models,
       backend: 'auto',
+      // On phones, keep MediaPipe landmark tracking off the GPU so it does not
+      // compete with ONNX face-swap inference for the same mobile GPU queue.
+      tracking: isPhoneLike ? 'CPU' : 'GPU',
       // Occlusion segmentation is optional and adds a second ML model/worker.
       // Disable it for live mobile use so the GPU/CPU budget goes to face tracking and swapping.
       occlusion: false,
       onProgress: updateProgress,
       onStats: ({ fps, inferMs, backend, latencyMs }) => {
-        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} AI FPS · ${Math.round(inferMs)} ms/frame · ${Math.round(latencyMs)} ms latency`;
+        const swapsPerSecond = inferMs > 0 ? (1000 / inferMs).toFixed(1) : '—';
+        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} camera FPS · ${swapsPerSecond} swaps/s · ${Math.round(inferMs)} ms/swap · ${Math.round(latencyMs)} ms latency`;
         setEngineStatus('ready', `Ready · ${backend.toUpperCase()}`, 'Local inference active');
       },
       onLog: (message) => console.info('[FaceShift AI]', message)
