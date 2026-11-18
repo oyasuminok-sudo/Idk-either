@@ -33,8 +33,8 @@ const edits = {
 `  const swapSpec = (fp === 'fp16' ? opts.models.swapperFp16 : opts.models.swapperFp32) ?? opts.models.swapperFp32 ?? opts.models.swapperFp16;
   if (!swapSpec) throw new Error('models.swapperFp16 or models.swapperFp32 is required.');
   const selectedPrecision = swapSpec === opts.models.swapperFp16 ? 'fp16' : 'fp32';
-  opts.onLog?.(`Swapper model: ${selectedPrecision.toUpperCase()} · WebGPU shader-f16: ${caps.webgpu.f16 ? 'available' : 'unavailable'}`);
-  opts.onLog?.(`WebGPU adapter: ${[caps.webgpu.vendor, caps.webgpu.architecture].filter(Boolean).join(' ') || 'details hidden by browser'}`);
+  opts.onLog?.('Swapper model: ' + selectedPrecision.toUpperCase() + ' · WebGPU shader-f16: ' + (caps.webgpu.f16 ? 'available' : 'unavailable'));
+  opts.onLog?.('WebGPU adapter: ' + ([caps.webgpu.vendor, caps.webgpu.architecture].filter(Boolean).join(' ') || 'details hidden by browser'));
 `
     ],
     [
