@@ -133,19 +133,24 @@ async function normalizePhoto(file) {
   } catch {
     bitmap = await createImageBitmap(file);
   }
+  // Face identity extraction does not need a full-resolution phone photo. Downscale
+  // large images before drawing to reduce peak memory use on mobile browsers.
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
   let canvas;
   let context;
   if ('OffscreenCanvas' in window) {
-    canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    canvas = new OffscreenCanvas(width, height);
     context = canvas.getContext('2d');
   } else {
     canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
+    canvas.width = width;
+    canvas.height = height;
     context = canvas.getContext('2d');
   }
   if (!context) throw new Error('Your browser could not prepare this image.');
-  context.drawImage(bitmap, 0, 0);
+  context.drawImage(bitmap, 0, 0, width, height);
   bitmap.close?.();
 
   let blob;
@@ -170,9 +175,10 @@ async function setReference(file) {
 
   referenceStatus.textContent = 'Loading the AI engine and finding your face…';
   referenceInput.disabled = true;
+  let nextUrl = null;
   try {
     const ai = await ensureEngine();
-    const nextUrl = await normalizePhoto(file);
+    nextUrl = await normalizePhoto(file);
     const faces = await ai.findFaces(nextUrl);
     if (!faces.length) {
       URL.revokeObjectURL(nextUrl);
@@ -185,6 +191,7 @@ async function setReference(file) {
 
     if (referenceUrl) URL.revokeObjectURL(referenceUrl);
     referenceUrl = nextUrl;
+    nextUrl = null;
     identityReady = true;
     referencePreview.src = referenceUrl;
     referencePreview.style.display = 'block';
@@ -196,6 +203,7 @@ async function setReference(file) {
     referenceStatus.textContent = `Reference ready.${countNote}${issueNote}`;
     cameraMessage.textContent = cameraStream ? 'Reference ready. Live transformation is active.' : 'Reference ready. Start the camera to see the live transformation.';
   } catch (error) {
+    if (nextUrl) URL.revokeObjectURL(nextUrl);
     referenceStatus.textContent = error?.message || 'Could not process this photo.';
   } finally {
     referenceInput.disabled = false;
@@ -235,7 +243,7 @@ async function startCamera() {
     await original.play();
 
     const ai = await ensureEngine();
-    transformedTrack = ai.process(sourceTrack);
+    transformedTrack = ai.process(sourceTrack, { maxFps: phoneLike ? 20 : 30 });
     if (!transformedTrack) throw new Error('The AI engine did not create an output video track. Try a browser with WebGPU support.');
     output.srcObject = new MediaStream([transformedTrack]);
     await output.play().catch(() => {});
@@ -311,3 +319,13 @@ strength.addEventListener('input', () => {
 startButton.addEventListener('click', startCamera);
 stopButton.addEventListener('click', stopCamera);
 window.addEventListener('pagehide', stopCamera);
+
+
+// Progressive Web App: cache the application shell for repeat visits.
+// The AI model files are cached separately by browser-inswapper.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
+      .catch((error) => console.warn('[FaceShift AI] Service worker registration failed:', error));
+  });
+}

@@ -5,4 +5,4 @@
 - MediaPipe Face Landmarker and selfie segmenter model files: Apache License 2.0, Google.
 - Vite: MIT License.
 
-Model weights are fetched at runtime from upstream model hosts and are not bundled in this archive.
+Model weights are fetched at runtime from upstream model hosts and are not bundled in this repository. Their separate model terms apply to use and redistribution.
