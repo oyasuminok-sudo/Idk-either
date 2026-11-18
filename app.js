@@ -1,0 +1,313 @@
+import { createFaceSwap, KNOWN_SHA256, probe } from 'browser-inswapper';
+
+// These URLs and checksums match the upstream browser-inswapper demo configuration.
+// The InsightFace model weights have separate terms (non-commercial research use).
+const HF = 'https://huggingface.co/';
+const models = {
+  landmarker: {
+    url: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+    sha256: KNOWN_SHA256.landmarker
+  },
+  swapperFp16: {
+    url: HF + 'facefusion/models-3.0.0/resolve/main/inswapper_128_fp16.onnx',
+    sha256: KNOWN_SHA256.swapperFp16
+  },
+  swapperFp32: {
+    url: HF + 'facefusion/models-3.0.0/resolve/main/inswapper_128.onnx',
+    sha256: KNOWN_SHA256.swapperFp32
+  },
+  arcface: {
+    url: HF + 'public-data/insightface/resolve/main/models/buffalo_l/w600k_r50.onnx',
+    sha256: KNOWN_SHA256.arcface
+  },
+  segmenter: {
+    url: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite',
+    sha256: KNOWN_SHA256.segmenter
+  }
+};
+
+const $ = (id) => document.getElementById(id);
+const output = $('output');
+const original = $('original');
+const placeholder = $('cameraPlaceholder');
+const cameraState = $('cameraState');
+const cameraMessage = $('cameraMessage');
+const engineState = $('engineState');
+const enginePercent = $('enginePercent');
+const modelProgress = $('modelProgress');
+const engineIndicator = $('engineIndicator');
+const backendName = $('backendName');
+const backendDetail = $('backendDetail');
+const statsMessage = $('statsMessage');
+const referenceInput = $('referenceInput');
+const referencePreview = $('referencePreview');
+const uploadPrompt = $('uploadPrompt');
+const referenceStatus = $('referenceStatus');
+const clearReference = $('clearReference');
+const strength = $('strength');
+const strengthValue = $('strengthValue');
+const startButton = $('startCamera');
+const stopButton = $('stopCamera');
+
+let engine = null;
+let enginePromise = null;
+let cameraStream = null;
+let sourceTrack = null;
+let transformedTrack = null;
+let referenceUrl = null;
+let identityReady = false;
+let currentStrength = 1;
+let startInProgress = false;
+
+function setEngineStatus(kind, title, detail) {
+  engineIndicator.className = `status-ring ${kind || ''}`.trim();
+  backendName.textContent = title;
+  backendDetail.textContent = detail;
+}
+
+function updateProgress({ model, loaded, total }) {
+  const max = total || 1;
+  modelProgress.max = max;
+  modelProgress.value = Math.min(loaded || 0, max);
+  const pct = Math.round((modelProgress.value / max) * 100);
+  enginePercent.textContent = `${pct}%`;
+  engineState.textContent = model ? `Downloading ${model}` : 'Loading AI models';
+  cameraMessage.textContent = `Preparing the AI engine: ${model || 'models'} (${Math.round((loaded || 0) / 1e6)} MB downloaded). Keep this tab open.`;
+}
+
+async function ensureEngine() {
+  if (engine) return engine;
+  if (enginePromise) return enginePromise;
+
+  enginePromise = (async () => {
+    setEngineStatus('', 'Checking browser support', 'Testing WebGPU, WebNN and CPU support');
+    engineState.textContent = 'Checking device support';
+    modelProgress.hidden = false;
+    modelProgress.value = 0;
+    enginePercent.textContent = '0%';
+
+    const caps = await probe();
+    const isPhoneLike = matchMedia('(pointer: coarse)').matches;
+    if (isPhoneLike && !caps.webgpu.available && !caps.webnn) {
+      throw new Error('This browser does not expose WebGPU or WebNN. On phones, the CPU-only fallback may exceed the browser tab memory limit. Try opening this page in an up-to-date Chrome on Android or Safari on iPhone/iPad.');
+    }
+
+    cameraMessage.textContent = 'The first model download is about 300 MB. Your photo and camera frames are not uploaded to a FaceShift server.';
+    const created = await createFaceSwap({
+      models,
+      backend: 'auto',
+      onProgress: updateProgress,
+      onStats: ({ fps, inferMs, backend, latencyMs }) => {
+        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} camera FPS · ${Math.round(1000 / Math.max(inferMs, 1))} AI swaps/s · ${Math.round(latencyMs)} ms latency`;
+        setEngineStatus('ready', `Ready · ${backend.toUpperCase()}`, 'Local inference active');
+      },
+      onLog: (message) => console.info('[FaceShift AI]', message)
+    });
+
+    engine = created;
+    modelProgress.value = modelProgress.max || 1;
+    enginePercent.textContent = '100%';
+    engineState.textContent = 'AI engine ready';
+    setEngineStatus('ready', `Ready · ${engine.backend.toUpperCase()}`, 'Model loaded in this browser');
+    cameraMessage.textContent = 'AI engine ready. Upload your own reference photo and start the camera.';
+    return engine;
+  })();
+
+  try {
+    return await enginePromise;
+  } catch (error) {
+    enginePromise = null;
+    modelProgress.hidden = true;
+    engineState.textContent = 'AI engine not ready';
+    setEngineStatus('error', 'Could not load AI engine', 'Check connection, browser support and model access');
+    throw error;
+  }
+}
+
+async function normalizePhoto(file) {
+  // Correct EXIF orientation before landmark detection. Use a normal canvas fallback
+  // for browsers without OffscreenCanvas.
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    bitmap = await createImageBitmap(file);
+  }
+  let canvas;
+  let context;
+  if ('OffscreenCanvas' in window) {
+    canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    context = canvas.getContext('2d');
+  } else {
+    canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    context = canvas.getContext('2d');
+  }
+  if (!context) throw new Error('Your browser could not prepare this image.');
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close?.();
+
+  let blob;
+  if (canvas.convertToBlob) {
+    blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+  } else {
+    blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not prepare the photo.')), 'image/jpeg', 0.95));
+  }
+  return URL.createObjectURL(blob);
+}
+
+async function setReference(file) {
+  if (!file) return;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    referenceStatus.textContent = 'Please choose a JPG, PNG or WEBP image.';
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    referenceStatus.textContent = 'This image is larger than 12 MB. Choose a smaller photo.';
+    return;
+  }
+
+  referenceStatus.textContent = 'Loading the AI engine and finding your face…';
+  referenceInput.disabled = true;
+  try {
+    const ai = await ensureEngine();
+    const nextUrl = await normalizePhoto(file);
+    const faces = await ai.findFaces(nextUrl);
+    if (!faces.length) {
+      URL.revokeObjectURL(nextUrl);
+      throw new Error('No face was detected. Try a sharper, front-facing photo with even lighting.');
+    }
+
+    // findFaces returns the largest face first. This own-face workflow uses that face.
+    await ai.setIdentity({ image: nextUrl, face: faces[0] }, { morphMs: 650 });
+    ai.setStrength(currentStrength, 400);
+
+    if (referenceUrl) URL.revokeObjectURL(referenceUrl);
+    referenceUrl = nextUrl;
+    identityReady = true;
+    referencePreview.src = referenceUrl;
+    referencePreview.style.display = 'block';
+    uploadPrompt.style.display = 'none';
+    clearReference.disabled = false;
+
+    const countNote = faces.length > 1 ? ` ${faces.length} faces found; selected the largest.` : '';
+    const issueNote = faces[0].issues?.length ? ' Tip: a clearer, evenly lit front-facing photo may improve the result.' : '';
+    referenceStatus.textContent = `Reference ready.${countNote}${issueNote}`;
+    cameraMessage.textContent = cameraStream ? 'Reference ready. Live transformation is active.' : 'Reference ready. Start the camera to see the live transformation.';
+  } catch (error) {
+    referenceStatus.textContent = error?.message || 'Could not process this photo.';
+  } finally {
+    referenceInput.disabled = false;
+  }
+}
+
+async function startCamera() {
+  if (startInProgress || cameraStream) return;
+  if (!identityReady) {
+    cameraMessage.textContent = 'Upload your own reference photo first. The AI engine needs it to create your live identity transformation.';
+    referenceInput.focus();
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraMessage.textContent = 'Camera access needs a secure context (HTTPS or localhost) and a supported browser.';
+    return;
+  }
+  startInProgress = true;
+  startButton.disabled = true;
+  cameraMessage.textContent = 'Requesting camera permission…';
+  try {
+    const phoneLike = matchMedia('(pointer: coarse) and (max-width: 900px)').matches;
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'user' },
+        width: { ideal: phoneLike ? 640 : 1280 },
+        height: { ideal: phoneLike ? 480 : 720 }
+      },
+      audio: false
+    });
+    sourceTrack = cameraStream.getVideoTracks()[0];
+    sourceTrack.addEventListener('ended', stopCamera, { once: true });
+    original.srcObject = cameraStream;
+    original.style.display = 'block';
+    output.style.display = 'block';
+    placeholder.style.display = 'none';
+    await original.play();
+
+    const ai = await ensureEngine();
+    transformedTrack = ai.process(sourceTrack);
+    if (!transformedTrack) throw new Error('The AI engine did not create an output video track. Try a browser with WebGPU support.');
+    output.srcObject = new MediaStream([transformedTrack]);
+    await output.play().catch(() => {});
+    cameraState.textContent = 'Camera active';
+    cameraMessage.textContent = identityReady
+      ? 'Live AI transformation is running. The small inset shows the original camera feed.'
+      : 'Camera is running. Upload your own reference photo to activate the face transformation.';
+    stopButton.disabled = false;
+  } catch (error) {
+    cameraMessage.textContent = error?.message || 'Could not start the camera.';
+    if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+    sourceTrack = null;
+    startButton.disabled = false;
+    cameraState.textContent = 'Camera off';
+    if (output.srcObject) output.srcObject = null;
+    output.style.display = 'none';
+    original.srcObject = null;
+    original.style.display = 'none';
+    placeholder.style.display = 'flex';
+  } finally {
+    startInProgress = false;
+  }
+}
+
+function stopCamera() {
+  if (transformedTrack) transformedTrack.stop();
+  if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
+  transformedTrack = null;
+  cameraStream = null;
+  sourceTrack = null;
+  output.pause();
+  original.pause();
+  output.srcObject = null;
+  original.srcObject = null;
+  output.style.display = 'none';
+  original.style.display = 'none';
+  placeholder.style.display = 'flex';
+  cameraState.textContent = 'Camera off';
+  cameraMessage.textContent = engine
+    ? (identityReady ? 'Camera stopped. Your AI engine and reference remain loaded in this tab.' : 'Camera stopped. The AI engine remains loaded in this tab.')
+    : 'Camera is off.';
+  startButton.disabled = false;
+  stopButton.disabled = true;
+}
+
+referenceInput.addEventListener('change', async () => {
+  const file = referenceInput.files?.[0];
+  referenceInput.value = '';
+  await setReference(file);
+});
+
+clearReference.addEventListener('click', () => {
+  if (referenceUrl) URL.revokeObjectURL(referenceUrl);
+  referenceUrl = null;
+  identityReady = false;
+  referencePreview.removeAttribute('src');
+  referencePreview.style.display = 'none';
+  uploadPrompt.style.display = 'block';
+  referenceStatus.textContent = 'No reference selected';
+  clearReference.disabled = true;
+  if (engine) engine.setStrength(0, 350);
+  cameraMessage.textContent = cameraStream ? 'Reference removed. Camera preview is still running without transformation.' : 'Reference removed.';
+});
+
+strength.addEventListener('input', () => {
+  currentStrength = Number(strength.value) / 100;
+  strengthValue.value = `${strength.value}%`;
+  strengthValue.textContent = `${strength.value}%`;
+  if (engine && identityReady) engine.setStrength(currentStrength, 200);
+});
+
+startButton.addEventListener('click', startCamera);
+stopButton.addEventListener('click', stopCamera);
+window.addEventListener('pagehide', stopCamera);

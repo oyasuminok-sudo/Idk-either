@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101116">
+  <meta name="description" content="FaceShift AI — local-first live face transformation in your browser.">
+  <title>FaceShift AI</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">F</span> FaceShift <span class="muted">AI</span></a>
+    <span class="local-pill"><span class="dot"></span> Browser-only processing</span>
+  </header>
+
+  <main class="shell">
+    <section class="intro">
+      <p class="eyebrow">REAL-TIME FACE TRANSFORMATION</p>
+      <h1>Your camera.<br><span>Reimagined.</span></h1>
+      <p class="lead">Use a photo of yourself as the reference, then see the live transformation in your browser. Camera frames and your reference photo stay on your device.</p>
+    </section>
+
+    <section class="workspace">
+      <div class="panel camera-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">LIVE OUTPUT</p><h2>Transformed preview</h2></div>
+          <span id="cameraState" class="state">Camera off</span>
+        </div>
+        <div class="preview" id="previewStage">
+          <video id="output" autoplay playsinline muted></video>
+          <video id="original" autoplay playsinline muted></video>
+          <div id="cameraPlaceholder" class="placeholder">
+            <div class="camera-icon">◎</div>
+            <strong>Your transformed camera preview appears here</strong>
+            <span>Upload your reference photo, then start the camera</span>
+          </div>
+          <div class="ai-label"><span class="live-dot"></span> AI-TRANSFORMED PREVIEW</div>
+        </div>
+        <div class="actions">
+          <button id="startCamera" class="button primary">Start live transformation</button>
+          <button id="stopCamera" class="button secondary" disabled>Stop camera</button>
+        </div>
+        <div class="engine-meter">
+          <div class="meter-top"><span id="engineState">AI engine not loaded</span><span id="enginePercent">0%</span></div>
+          <progress id="modelProgress" max="1" value="0"></progress>
+        </div>
+        <p id="cameraMessage" class="hint" role="status" aria-live="polite">The AI engine loads when you first start the transformation. The initial model download is about 300 MB.</p>
+        <p id="statsMessage" class="stats" aria-live="polite">Performance statistics will appear here.</p>
+      </div>
+
+      <aside class="panel reference-panel">
+        <p class="eyebrow">REFERENCE IMAGE</p>
+        <h2>Your reference</h2>
+        <p class="subtext">Choose a clear, front-facing photo of yourself. A single face, sharp focus and even lighting give the best result.</p>
+        <label class="upload-zone" for="referenceInput" id="uploadZone">
+          <img id="referencePreview" alt="Your uploaded reference photo">
+          <span id="uploadPrompt">
+            <span class="upload-icon">＋</span>
+            <strong>Upload your photo</strong>
+            <small>JPG, PNG or WEBP · up to 12 MB</small>
+          </span>
+        </label>
+        <input id="referenceInput" type="file" accept="image/jpeg,image/png,image/webp">
+        <div id="referenceStatus" class="reference-status" role="status">No reference selected</div>
+        <button id="clearReference" class="button secondary full" disabled>Remove photo</button>
+        <div class="notice">
+          <strong>Own-face mode</strong>
+          <p>This project is configured for your own likeness. Don't use another person's face without their permission.</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel settings-panel">
+      <div class="settings-copy">
+        <p class="eyebrow">TRANSFORMATION</p>
+        <h2>Live settings</h2>
+        <p class="subtext">Adjust how strongly the reference identity is applied. The engine continues tracking your expressions and head movement.</p>
+      </div>
+      <label class="strength-control" for="strength">
+        <span><strong>Transformation strength</strong><output id="strengthValue">100%</output></span>
+        <input id="strength" type="range" min="0" max="100" value="100" step="1">
+        <span class="range-labels"><small>Original</small><small>Full transformation</small></span>
+      </label>
+    </section>
+
+    <section class="panel engine-panel">
+      <div>
+        <p class="eyebrow">LOCAL AI ENGINE</p>
+        <h2>How processing works</h2>
+        <p class="subtext">Face tracking and identity transfer run in the browser using WebGPU/WebNN where available, with a CPU fallback on suitable desktop devices. Model files download directly to your browser and are cached for later use.</p>
+      </div>
+      <div class="engine-status"><span id="engineIndicator" class="status-ring"></span><span><strong id="backendName">Not initialized</strong><small id="backendDetail">Waiting for camera or reference photo</small></span></div>
+    </section>
+
+    <section class="disclosure">
+      <strong>AI alteration notice</strong>
+      <p>The preview is visibly labelled as AI-transformed. Keep that disclosure when recording or sharing altered footage. Only use your own reference image or one you have explicit permission to use.</p>
+    </section>
+
+    <footer>
+      <span>FaceShift AI · Browser prototype 0.2.0</span>
+      <span>No video upload to a FaceShift server. Model files are fetched from their providers.</span>
+    </footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
