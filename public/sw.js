@@ -34,7 +34,7 @@ self.addEventListener('fetch', (event) => {
     }
     try {
       const response = await fetch(request);
-      if (response.ok && (request.mode === 'navigate' || /\\.(?:js|css|svg|webmanifest)$/.test(url.pathname))) {
+      if (response.ok && (request.mode === 'navigate' || /[.](?:js|css|svg|webmanifest)$/.test(url.pathname))) {
         cache.put(request, response.clone());
       }
       return response;
