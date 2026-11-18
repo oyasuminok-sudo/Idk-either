@@ -53,6 +53,7 @@ let engine = null;
 let enginePromise = null;
 let cameraStream = null;
 let sourceTrack = null;
+let processingTrack = null;
 let transformedTrack = null;
 let referenceUrl = null;
 let identityReady = false;
@@ -230,7 +231,8 @@ async function startCamera() {
       video: {
         facingMode: { ideal: 'user' },
         width: { ideal: phoneLike ? 640 : 1280 },
-        height: { ideal: phoneLike ? 480 : 720 }
+        height: { ideal: phoneLike ? 480 : 720 },
+        frameRate: { ideal: 30, max: 30 }
       },
       audio: false
     });
@@ -243,7 +245,24 @@ async function startCamera() {
     await original.play();
 
     const ai = await ensureEngine();
-    transformedTrack = ai.process(sourceTrack, { maxFps: phoneLike ? 20 : 30 });
+
+    // Keep the visible camera preview at normal camera quality, but give the
+    // AI pipeline a lighter cloned track on phones. browser-inswapper's
+    // MediaStreamTrackProcessor path processes every incoming frame, so
+    // limiting the clone's capture rate is more effective than maxFps alone.
+    processingTrack = sourceTrack.clone();
+    if (phoneLike) {
+      try {
+        await processingTrack.applyConstraints({
+          width: { ideal: 480, max: 480 },
+          height: { ideal: 360, max: 360 },
+          frameRate: { ideal: 12, max: 12 }
+        });
+      } catch (constraintError) {
+        console.warn('[FaceShift AI] Could not apply low-power camera constraints:', constraintError);
+      }
+    }
+    transformedTrack = ai.process(processingTrack, { maxFps: phoneLike ? 12 : 24 });
     if (!transformedTrack) throw new Error('The AI engine did not create an output video track. Try a browser with WebGPU support.');
     output.srcObject = new MediaStream([transformedTrack]);
     await output.play().catch(() => {});
@@ -254,6 +273,8 @@ async function startCamera() {
     stopButton.disabled = false;
   } catch (error) {
     cameraMessage.textContent = error?.message || 'Could not start the camera.';
+    if (processingTrack) processingTrack.stop();
+    processingTrack = null;
     if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
     cameraStream = null;
     sourceTrack = null;
@@ -271,8 +292,10 @@ async function startCamera() {
 
 function stopCamera() {
   if (transformedTrack) transformedTrack.stop();
+  if (processingTrack) processingTrack.stop();
   if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop());
   transformedTrack = null;
+  processingTrack = null;
   cameraStream = null;
   sourceTrack = null;
   output.pause();
