@@ -102,7 +102,7 @@ async function ensureEngine() {
       occlusion: false,
       onProgress: updateProgress,
       onStats: ({ fps, inferMs, backend, latencyMs }) => {
-        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} camera FPS · ${Math.round(1000 / Math.max(inferMs, 1))} AI swaps/s · ${Math.round(latencyMs)} ms latency`;
+        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} AI FPS · ${Math.round(inferMs)} ms/frame · ${Math.round(latencyMs)} ms latency`;
         setEngineStatus('ready', `Ready · ${backend.toUpperCase()}`, 'Local inference active');
       },
       onLog: (message) => console.info('[FaceShift AI]', message)
