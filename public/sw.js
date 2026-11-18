@@ -1,4 +1,4 @@
-const VERSION = 'faceshift-shell-v3';
+const VERSION = 'faceshift-shell-v4';
 const SHELL = ['./', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (event) => {
