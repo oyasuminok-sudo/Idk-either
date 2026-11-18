@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
-  <title>FaceShift AI · v0.5.0</title>
+  <title>FaceShift AI · v0.5.1</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -63,10 +63,10 @@
           <span id="uploadPrompt">
             <span class="upload-icon">＋</span>
             <strong>Upload your photo</strong>
-            <small>JPG, PNG or WEBP · up to 12 MB</small>
+            <small>Common image formats · up to 12 MB (JPG/PNG recommended)</small>
           </span>
         </label>
-        <input id="referenceInput" type="file" accept="image/jpeg,image/png,image/webp">
+        <input id="referenceInput" type="file" accept="image/*">
         <div id="referenceStatus" class="reference-status" role="status">No reference selected</div>
         <button id="clearReference" class="button secondary full" disabled>Remove photo</button>
         <div class="notice">
@@ -104,7 +104,7 @@
     </section>
 
     <footer>
-      <span>FaceShift AI · Browser app 0.5.0</span>
+      <span>FaceShift AI · Browser app 0.5.1</span>
       <span>No video upload to a FaceShift server. Model files are fetched from their providers.</span>
     </footer>
   </main>

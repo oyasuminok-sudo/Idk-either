@@ -42,6 +42,32 @@ const edits = {
 `,
 `export type Stats = { fps: number; inferMs: number; swapMs: number; swapsPerSecond: number; backend: Backend; latencyMs: number };
 `
+    ],
+    [
+`          const b0 = boxOf(coarse.lm, W, H), side = 2 * Math.max(b0.width, b0.height);
+          const sx = b0.x + b0.width / 2 - side / 2, sy = b0.y + b0.height / 2 - side / 2;
+          const crop = await createImageBitmap(bitmap, sx, sy, side, side, { resizeWidth: 512, resizeHeight: 512 });
+`,
+`          const b0 = boxOf(coarse.lm, W, H);
+          // Keep detector refinement crops inside the source bitmap. Mobile photos can
+          // put the face close to an edge, where a negative crop origin makes decoding fail.
+          const side = Math.max(1, Math.min(2 * Math.max(b0.width, b0.height), W, H));
+          const centerX = Math.max(side / 2, Math.min(W - side / 2, b0.x + b0.width / 2));
+          const centerY = Math.max(side / 2, Math.min(H - side / 2, b0.y + b0.height / 2));
+          const sx = centerX - side / 2, sy = centerY - side / 2;
+          const crop = await createImageBitmap(bitmap, sx, sy, side, side, { resizeWidth: 512, resizeHeight: 512 });
+`
+    ],
+    [
+`          const ps = 1.5 * Math.max(box.width, box.height);
+          const preview = await createImageBitmap(bitmap, box.x + box.width / 2 - ps / 2, box.y + box.height / 2 - ps / 2, ps, ps, { resizeWidth: 160, resizeHeight: 160, resizeQuality: 'high' });
+`,
+`          const wantedPreviewSide = 1.5 * Math.max(box.width, box.height);
+          const previewSide = Math.max(1, Math.min(wantedPreviewSide, W, H));
+          const previewX = Math.max(previewSide / 2, Math.min(W - previewSide / 2, box.x + box.width / 2));
+          const previewY = Math.max(previewSide / 2, Math.min(H - previewSide / 2, box.y + box.height / 2));
+          const preview = await createImageBitmap(bitmap, previewX - previewSide / 2, previewY - previewSide / 2, previewSide, previewSide, { resizeWidth: 160, resizeHeight: 160, resizeQuality: 'high' });
+`
     ]
   ],
   'protocol.ts': [
