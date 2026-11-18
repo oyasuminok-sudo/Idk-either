@@ -97,9 +97,12 @@ async function ensureEngine() {
     const created = await createFaceSwap({
       models,
       backend: 'auto',
+      // Occlusion segmentation is optional and adds a second ML model/worker.
+      // Disable it for live mobile use so the GPU/CPU budget goes to face tracking and swapping.
+      occlusion: false,
       onProgress: updateProgress,
       onStats: ({ fps, inferMs, backend, latencyMs }) => {
-        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} camera FPS · ${Math.round(1000 / Math.max(inferMs, 1))} AI swaps/s · ${Math.round(latencyMs)} ms latency`;
+        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} AI FPS · ${Math.round(inferMs)} ms/frame · ${Math.round(latencyMs)} ms latency`;
         setEngineStatus('ready', `Ready · ${backend.toUpperCase()}`, 'Local inference active');
       },
       onLog: (message) => console.info('[FaceShift AI]', message)
@@ -232,7 +235,7 @@ async function startCamera() {
         facingMode: { ideal: 'user' },
         width: { ideal: phoneLike ? 640 : 1280 },
         height: { ideal: phoneLike ? 480 : 720 },
-        frameRate: { ideal: 30, max: 30 }
+        frameRate: { ideal: 24, max: 30 }
       },
       audio: false
     });
@@ -246,23 +249,23 @@ async function startCamera() {
 
     const ai = await ensureEngine();
 
-    // Keep the visible camera preview at normal camera quality, but give the
-    // AI pipeline a lighter cloned track on phones. browser-inswapper's
-    // MediaStreamTrackProcessor path processes every incoming frame, so
-    // limiting the clone's capture rate is more effective than maxFps alone.
+    // Keep the visible camera preview on the original camera stream. Feed the
+    // AI pipeline a 480×360 clone capped at 24 FPS on phones. Chrome's
+    // MediaStreamTrackProcessor path processes every incoming frame, so the
+    // track constraint—not maxFps—is what controls its workload.
     processingTrack = sourceTrack.clone();
     if (phoneLike) {
       try {
         await processingTrack.applyConstraints({
           width: { ideal: 480, max: 480 },
           height: { ideal: 360, max: 360 },
-          frameRate: { ideal: 12, max: 12 }
+          frameRate: { ideal: 24, max: 24 }
         });
       } catch (constraintError) {
         console.warn('[FaceShift AI] Could not apply low-power camera constraints:', constraintError);
       }
     }
-    transformedTrack = ai.process(processingTrack, { maxFps: phoneLike ? 12 : 24 });
+    transformedTrack = ai.process(processingTrack, { maxFps: 24 });
     if (!transformedTrack) throw new Error('The AI engine did not create an output video track. Try a browser with WebGPU support.');
     output.srcObject = new MediaStream([transformedTrack]);
     await output.play().catch(() => {});
