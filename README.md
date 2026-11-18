@@ -1,4 +1,4 @@
-# FaceShift AI — Browser app 0.5.0
+# FaceShift AI — Browser app 0.5.1
 
 A browser-only, local-first live face transformation app, configured for use with the user's own reference photo.
 
