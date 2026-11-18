@@ -86,14 +86,14 @@ async function createSwapper(bytes: ArrayBuffer, order: Backend[]) {
       let t = performance.now();
       const s = await plainRunner(bytes, b);
       await s.run(target, source); // first run compiles shaders
-      post({ type: 'log', message: `${b}: ready in ${Math.round(performance.now() - t)} ms` });
+      post({ type: 'log', message: b + ': ready in ' + Math.round(performance.now() - t) + ' ms' });
       t = performance.now();
       for (let i = 0; i < 5; i++) await s.run(target, source);
       const ms = (performance.now() - t) / 5;
-      post({ type: 'log', message: `${b}: ${ms.toFixed(1)} ms per swap` });
+      post({ type: 'log', message: b + ': ' + ms.toFixed(1) + ' ms per swap' });
       if (!best || ms < best.ms) { await best?.s.release(); best = { s, b, ms }; } else await s.release();
     } catch (err) {
-      post({ type: 'log', message: `${b} unavailable: ${err instanceof Error ? err.message : err}` });
+      post({ type: 'log', message: b + ' unavailable: ' + (err instanceof Error ? err.message : err) });
     }
   }
   if (!best) throw new Error('No way to run the face model on this device.');
@@ -122,11 +122,11 @@ async function createSwapper(bytes: ArrayBuffer, order: Backend[]) {
       ));
       session = capturedSession;
       warmed = true;
-      post({ type: 'log', message: `WebGPU/${layout}: graph capture enabled` });
+      post({ type: 'log', message: 'WebGPU/' + layout + ': graph capture enabled' });
     } catch (error) {
       if (capturedSession) await capturedSession.release().catch(() => {});
       const reason = error instanceof Error ? error.message : String(error);
-      post({ type: 'log', message: `WebGPU/${layout}: graph capture unavailable; retrying without it (${reason})` });
+      post({ type: 'log', message: 'WebGPU/' + layout + ': graph capture unavailable; retrying without it (' + reason + ')' });
       session = await makeSession(false);
     }
   } else {
@@ -161,21 +161,21 @@ async function createSwapper(bytes: ArrayBuffer, order: Backend[]) {
         }
         samples.sort((a, b) => a - b);
         const ms = samples[1];
-        post({ type: 'log', message: `${b.toUpperCase()}/${layout}: ${ms.toFixed(1)} ms per inference (benchmark setup ${Math.round(performance.now() - started)} ms)` });
+        post({ type: 'log', message: b.toUpperCase() + '/' + layout + ': ' + ms.toFixed(1) + ' ms per inference (benchmark setup ' + Math.round(performance.now() - started) + ' ms)' });
         if (!best || ms < best.ms) {
           await best?.s.release();
           best = { s: runner, b, layout, ms };
           runner = null;
         }
       } catch (err) {
-        post({ type: 'log', message: `${b.toUpperCase()}/${layout} unavailable: ${err instanceof Error ? err.message : err}` });
+        post({ type: 'log', message: b.toUpperCase() + '/' + layout + ' unavailable: ' + (err instanceof Error ? err.message : err) });
       } finally {
         if (runner) await runner.release().catch(() => {});
       }
     }
   }
   if (!best) throw new Error('No way to run the face model on this device.');
-  post({ type: 'log', message: `Selected ${best.b.toUpperCase()}/${best.layout}: ${best.ms.toFixed(1)} ms per inference` });
+  post({ type: 'log', message: 'Selected ' + best.b.toUpperCase() + '/' + best.layout + ': ' + best.ms.toFixed(1) + ' ms per inference' });
   return best;
 }
 `
