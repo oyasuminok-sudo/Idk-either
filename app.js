@@ -138,48 +138,95 @@ async function ensureEngine() {
   }
 }
 
-async function normalizePhoto(file) {
-  // Correct EXIF orientation before landmark detection. Use a normal canvas fallback
-  // for browsers without OffscreenCanvas.
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  } catch {
-    bitmap = await createImageBitmap(file);
-  }
-  // Face identity extraction does not need a full-resolution phone photo. Downscale
-  // large images before drawing to reduce peak memory use on mobile browsers.
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-  let canvas;
-  let context;
-  if ('OffscreenCanvas' in window) {
-    canvas = new OffscreenCanvas(width, height);
-    context = canvas.getContext('2d');
-  } else {
-    canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    context = canvas.getContext('2d');
-  }
-  if (!context) throw new Error('Your browser could not prepare this image.');
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close?.();
+async function decodePhotoFile(file) {
+  const errors = [];
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (error) {
+      errors.push(error?.message || String(error));
+    }
+    try {
+      // Some Android/WebView decoders reject the EXIF option even when the image itself is valid.
+      return await createImageBitmap(file);
+    } catch (error) {
+      errors.push(error?.message || String(error));
+    }
 
-  let blob;
-  if (canvas.convertToBlob) {
-    blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+    // A few mobile decoders handle a temporary <img> more reliably than a File/Blob directly.
+    const temporaryUrl = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = temporaryUrl;
+      if (typeof image.decode === 'function') {
+        await image.decode();
+      } else {
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = () => reject(new Error('The browser could not decode this image.'));
+        });
+      }
+      return await createImageBitmap(image);
+    } catch (error) {
+      errors.push(error?.message || String(error));
+    } finally {
+      URL.revokeObjectURL(temporaryUrl);
+    }
   } else {
-    blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not prepare the photo.')), 'image/jpeg', 0.95));
+    throw new Error('This browser does not support the image decoder required by the AI engine. Open FaceShift in a recent version of Chrome.');
   }
-  return URL.createObjectURL(blob);
+
+  const format = file.type || file.name.split('.').pop()?.toUpperCase() || 'unknown format';
+  const detail = errors.filter(Boolean).slice(-2).join(' · ');
+  throw new Error(`This photo could not be decoded (${format}). Try exporting it as a standard JPG or PNG. ${detail}`);
+}
+
+async function normalizePhoto(file) {
+  // Decode and correct EXIF orientation before detection. Downscale the reference
+  // before the AI models see it, keeping mobile memory and preprocessing work lower.
+  const bitmap = await decodePhotoFile(file);
+  try {
+    const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    let canvas;
+    let context;
+    if ('OffscreenCanvas' in window) {
+      canvas = new OffscreenCanvas(width, height);
+      context = canvas.getContext('2d');
+    } else {
+      canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      context = canvas.getContext('2d');
+    }
+    if (!context) throw new Error('Your browser could not prepare this image.');
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    let blob;
+    if (canvas.convertToBlob) {
+      blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.93 });
+    } else {
+      blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (value) => value ? resolve(value) : reject(new Error('Could not convert the photo to JPEG.')),
+          'image/jpeg',
+          0.93
+        );
+      });
+    }
+    return URL.createObjectURL(blob);
+  } finally {
+    bitmap.close?.();
+  }
 }
 
 async function setReference(file) {
   if (!file) return;
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    referenceStatus.textContent = 'Please choose a JPG, PNG or WEBP image.';
+  const looksLikeImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|avif|heic|heif|bmp)$/i.test(file.name);
+  if (!looksLikeImage) {
+    referenceStatus.textContent = 'Please choose an image file (JPG, PNG or WEBP work best).';
     return;
   }
   if (file.size > 12 * 1024 * 1024) {
@@ -187,7 +234,7 @@ async function setReference(file) {
     return;
   }
 
-  referenceStatus.textContent = 'Loading the AI engine and finding your face…';
+  referenceStatus.textContent = 'Preparing your photo, loading the AI engine and finding your face…';
   referenceInput.disabled = true;
   let nextUrl = null;
   try {
@@ -218,7 +265,7 @@ async function setReference(file) {
     cameraMessage.textContent = cameraStream ? 'Reference ready. Live transformation is active.' : 'Reference ready. Start the camera to see the live transformation.';
   } catch (error) {
     if (nextUrl) URL.revokeObjectURL(nextUrl);
-    referenceStatus.textContent = error?.message || 'Could not process this photo.';
+    referenceStatus.textContent = error?.message || 'Could not process this photo. Try a standard JPG or PNG image.';
   } finally {
     referenceInput.disabled = false;
   }
