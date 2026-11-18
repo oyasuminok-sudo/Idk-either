@@ -234,18 +234,21 @@ async function setReference(file) {
     return;
   }
 
-  referenceStatus.textContent = 'Preparing your photo, loading the AI engine and finding your face…';
+  referenceStatus.textContent = 'Step 1/4 · Loading the AI engine…';
   referenceInput.disabled = true;
   let nextUrl = null;
   try {
     const ai = await ensureEngine();
+    referenceStatus.textContent = 'Step 2/4 · Decoding and preparing the photo…';
     nextUrl = await normalizePhoto(file);
+    referenceStatus.textContent = 'Step 3/4 · Detecting a face…';
     const faces = await ai.findFaces(nextUrl);
     if (!faces.length) {
       URL.revokeObjectURL(nextUrl);
       throw new Error('No face was detected. Try a sharper, front-facing photo with even lighting.');
     }
 
+    referenceStatus.textContent = 'Step 4/4 · Applying the reference identity…';
     // findFaces returns the largest face first. This own-face workflow uses that face.
     await ai.setIdentity({ image: nextUrl, face: faces[0] }, { morphMs: 650 });
     ai.setStrength(currentStrength, 400);
@@ -265,7 +268,8 @@ async function setReference(file) {
     cameraMessage.textContent = cameraStream ? 'Reference ready. Live transformation is active.' : 'Reference ready. Start the camera to see the live transformation.';
   } catch (error) {
     if (nextUrl) URL.revokeObjectURL(nextUrl);
-    referenceStatus.textContent = error?.message || 'Could not process this photo. Try a standard JPG or PNG image.';
+    console.error('[FaceShift AI] Reference upload failed:', error);
+    referenceStatus.textContent = `Upload failed: ${error?.message || String(error)}`;
   } finally {
     referenceInput.disabled = false;
   }

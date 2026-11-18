@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
-  <title>FaceShift AI · v0.5.1</title>
+  <title>FaceShift AI · v0.5.2</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -104,10 +104,22 @@
     </section>
 
     <footer>
-      <span>FaceShift AI · Browser app 0.5.1</span>
+      <span>FaceShift AI · Browser app 0.5.2</span>
       <span>No video upload to a FaceShift server. Model files are fetched from their providers.</span>
     </footer>
   </main>
+  <script>
+    // Capture failures that happen before app.js finishes initializing.
+    window.addEventListener('error', (event) => {
+      const status = document.getElementById('referenceStatus');
+      if (status) status.textContent = 'App error: ' + (event.message || 'JavaScript failed to load') + (event.filename ? ' · ' + event.filename.split('/').pop() : '');
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      const status = document.getElementById('referenceStatus');
+      const reason = event.reason;
+      if (status) status.textContent = 'Background error: ' + (reason && reason.message ? reason.message : String(reason));
+    });
+  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
