@@ -1,14 +1,17 @@
 {
   "name": "faceshift-ai-browser",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Local-first, browser-based live face transformation prototype",
-  "engines": { "node": ">=22.6" },
+  "description": "Local-first, browser-based live face transformation PWA",
+  "engines": {
+    "node": ">=22.6"
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "vite build"
   },
   "dependencies": {
     "browser-inswapper": "0.1.0"
