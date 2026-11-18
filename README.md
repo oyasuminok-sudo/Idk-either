@@ -52,9 +52,9 @@ The current version is not guaranteed to run on every Android device. It still n
 
 ## Model and software licensing
 
-This project integrates `browser-inswapper` (PolyForm Noncommercial 1.0.0). The InsightFace model weights are separately licensed for non-commercial research use; those weights are not relicensed by this project. MediaPipe models are Apache-2.0. Review upstream terms before redistributing or using this beyond personal experimentation.
+This project integrates `browser-inswapper` (pinned to upstream commit `25ea3b1`, PolyForm Noncommercial 1.0.0). The InsightFace model weights are separately licensed for non-commercial research use; those weights are not relicensed by this project. MediaPipe models are Apache-2.0. Review upstream terms before redistributing or using this beyond personal experimentation.
 
-The project does not bundle model weights. It fetches them from upstream locations configured in `app.js` and verifies SHA-256 hashes using the library's `KNOWN_SHA256` constants.
+The upstream TypeScript engine source is fetched from its pinned GitHub commit and compiled by Vite. The project does not bundle model weights. It fetches them from upstream locations configured in `app.js` and verifies SHA-256 hashes using the library's `KNOWN_SHA256` constants.
 
 Upstream:
 - https://github.com/robert-schmidt/browser-inswapper
