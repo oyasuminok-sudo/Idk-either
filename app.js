@@ -39,6 +39,8 @@ const engineIndicator = $('engineIndicator');
 const backendName = $('backendName');
 const backendDetail = $('backendDetail');
 const statsMessage = $('statsMessage');
+const engineDiagnostics = $('engineDiagnostics');
+let diagnosticLines = [];
 const referenceInput = $('referenceInput');
 const referencePreview = $('referencePreview');
 const uploadPrompt = $('uploadPrompt');
@@ -104,12 +106,16 @@ async function ensureEngine() {
       // Disable it for live mobile use so the GPU/CPU budget goes to face tracking and swapping.
       occlusion: false,
       onProgress: updateProgress,
-      onStats: ({ fps, inferMs, backend, latencyMs }) => {
-        const swapsPerSecond = inferMs > 0 ? (1000 / inferMs).toFixed(1) : '—';
-        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} camera FPS · ${swapsPerSecond} swaps/s · ${Math.round(inferMs)} ms/swap · ${Math.round(latencyMs)} ms latency`;
+      onStats: ({ fps, inferMs, swapMs, swapsPerSecond, backend, latencyMs }) => {
+        statsMessage.textContent = `${backend.toUpperCase()} · ${Math.round(fps)} processed frames/s · ${swapsPerSecond.toFixed(1)} completed swaps/s · ${Math.round(inferMs)} ms inference · ${Math.round(swapMs)} ms full swap · ${Math.round(latencyMs)} ms frame latency`;
         setEngineStatus('ready', `Ready · ${backend.toUpperCase()}`, 'Local inference active');
       },
-      onLog: (message) => console.info('[FaceShift AI]', message)
+      onLog: (message) => {
+        console.info('[FaceShift AI]', message);
+        diagnosticLines.push(message);
+        if (diagnosticLines.length > 4) diagnosticLines.shift();
+        engineDiagnostics.textContent = diagnosticLines.join(' · ');
+      }
     });
 
     engine = created;
