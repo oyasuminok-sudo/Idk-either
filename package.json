@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Local-first, browser-based live face transformation PWA",
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.12"
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
